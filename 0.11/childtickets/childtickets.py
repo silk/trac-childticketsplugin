@@ -22,7 +22,7 @@ class TracchildticketsModule(Component):
         # Get ticket relationships before processing anything.
         if req.path_info[0:8] == '/ticket/':
             cursor = self.env.get_db_cnx().cursor()
-            cursor.execute('SELECT ticket,value FROM ticket_custom WHERE name="parent"')
+            cursor.execute("SELECT ticket,value FROM ticket_custom WHERE name='parent'")
             self.env.childtickets = {}
             for child,parent in cursor.fetchall():
                 if parent and re.match('#\d+',parent):
