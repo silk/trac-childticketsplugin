@@ -92,7 +92,10 @@ class TracchildticketsModule(Component):
                 columns = self.config.getlist('childtickets', 'parent.%s.table_headers' % ticket['type'], default=['summary','owner'])
 
                 # trac.ini : Default milestone of child tickets?
-                default_child_milestone = ticket['milestone'] if self.config.getbool('childtickets', 'parent.%s.inherit_milestone' % ticket['type']) else self.config.get('ticket', 'default_milestone')
+                if self.config.getbool('childtickets', 'parent.%s.inherit_milestone' % ticket['type']):
+                    default_child_milestone = ticket['milestone']
+                else:
+                    default_child_milestone = self.config.get('ticket', 'default_milestone')
 
                 # trac.ini : Default 'type' of child tickets?
                 default_child_type = self.config.get('childtickets', 'parent.%s.default_child_type' % ticket['type'])
@@ -142,7 +145,9 @@ class TracchildticketsModule(Component):
     def _table_row(self, req, ticket, columns):
 
         # Is the ticket closed?
-        ticket_class = 'closed' if ticket['status'] == 'closed' else ''
+        ticket_class = ''
+        if ticket['status'] == 'closed':
+            ticket_class = 'closed'
 
         return tag.tr(
                 tag.td(tag.a("#%s" % ticket.id, href=req.href.ticket(ticket.id), title="Child ticket #%s" % ticket.id, class_=ticket_class), class_="id"),
