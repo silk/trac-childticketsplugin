@@ -129,7 +129,9 @@ class TracchildticketsModule(Component):
                         default_child_milestone = self.config.get('ticket', 'default_milestone')
 
                     # trac.ini : Default 'type' of child tickets?
-                    default_child_type = self.config.get('childtickets', 'parent.%s.default_child_type' % ticket['type'])
+                    default_child_type = self.config.get('childtickets', 'parent.%s.default_child_type' % ticket['type'], default=self.config.get('ticket','default_type'))
+
+                    self.env.log.debug("TracchildticketsModule : default_child_type: %s" % default_child_type)
 
                     # Can user create a new ticket? If not, just display title (ie. no 'create' button).
                     if 'TICKET_CREATE' in req.perm(ticket.resource):
