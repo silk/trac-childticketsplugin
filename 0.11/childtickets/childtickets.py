@@ -7,6 +7,7 @@ from trac.ticket.api import ITicketManipulator
 from trac.web.api import ITemplateStreamFilter, IRequestFilter
 from trac.perm import IPermissionRequestor
 from trac.ticket.model import Ticket
+from trac.resource import ResourceNotFound
 
 from genshi.builder import tag
 from genshi.filters import Transformer
@@ -54,20 +55,40 @@ class TracchildticketsModule(Component):
             if not re.match('^#\d+',ticket.values.get('parent')):
                 yield None, "The parent id must be of the form '#id' where 'id' is a valid ticket id."
 
-            parent = int(ticket.values.get('parent').lstrip('#'))
+            # Strip the '#' to get parent id.
+            pid = int(ticket.values.get('parent').lstrip('#'))
+
+            # Check we're not being daft and setting own id as parent.
+            if ticket.id and pid == ticket.id:
+                yield None, "The ticket has same id as parent id."
 
             # Try creating parent ticket instance : it should exist.
             try:
-                Ticket(self.env, parent)
-            except:
-                yield None,"The parent ticket #%d does not exist." % parent
+                parent = Ticket(self.env, pid)
+            
+                # self.env.log.debug("TracchildticketsModule : parent.ticket.type: %s" % parent['type'])
 
-            # Check we're not being daft and setting own id as parent (this could still be poss. if you 'guess' the id at creation time!)
-            if ticket.id and parent == ticket.id:
-                yield None, "The ticket has same id as parent id."
+                # (NOTE: The following checks are checks on the parent ticket being defined in the 'parent' box rather than on
+                # the child ticket actually being created. It is therefore possible to 'legally' create this child ticket but
+                # then for the restrictions or type of the parent ticket to change - I have NOT restricted the possibility to
+                # modify parent type after children have been assigned, however, further modifications to the children themselves
+                # would then throw up some errors and force the users to re-set the child type.)
 
-            # TODO: Add a recursive ticket check, subject to a general limit (trac.ini) which has a default value of, say 3.
-            # yield None, "The ticket recursion is too deep (%s)" % max_depth
+                # Does the parent ticket 'type' even allow child tickets? 
+                if not self.config.getbool('childtickets', 'parent.%s.allow_child_tickets' % parent['type']):
+                    yield None, "The parent ticket (#%s) has type %s which does not allow child tickets." % (pid,parent['type'])
+
+                # It is possible that the parent restricts the type of children it allows.
+                allowedtypes = self.config.getlist('childtickets', 'parent.%s.restrict_child_type' % parent['type'], default=[])
+                if allowedtypes and ticket['type'] not in allowedtypes:
+                    yield None, "The parent ticket (#%s) has type %s which does not allow child type '%s'. Must be one of : %s." % (pid,parent['type'],ticket['type'],','.join(allowedtypes))
+
+            # If the 'Ticket' creation fails above.
+            except ResourceNotFound: 
+                yield None,"The parent ticket #%d does not exist." % pid
+
+        # TODO: Add a recursive ticket check, subject to a general limit (trac.ini) which has a default value of, say 3.
+        # yield None, "The ticket recursion is too deep (%s)" % max_depth
 
 
     
@@ -80,50 +101,59 @@ class TracchildticketsModule(Component):
             # Get the ticket info.
             ticket = data.get('ticket')
 
-            # self.env.log.debug("XXXX : ITemplateStreamFilter.filter_stream() : ticket.type: %s" % ticket['type'])
-            
             # Modify ticket.html with sub-ticket table, create button, etc...
-            if ticket and ticket.exists and self.config.getbool('childtickets', 'parent.%s.allow_child_tickets' % ticket['type']):
+            # As follows:
+            # - If ticket has no child tickets and child tickets are NOT allowed then skip.
+            # - If ticket has child tickets and child tickets are NOT allowed (ie. rules changed or ticket type changed after children were assigned),
+            #   print list of tickets but do not allow any tickets to be created.
+            # - If child tickets are allowed then print list of child tickets or 'No Child Tickets' if non are currently assigned.
+            # 
+            if ticket and ticket.exists:
 
                 filter = Transformer('//div[@class="description"]')
                 snippet = tag()
                 
-                # trac.ini : Which columns to display in child ticket listing?
-                columns = self.config.getlist('childtickets', 'parent.%s.table_headers' % ticket['type'], default=['summary','owner'])
-
-                # trac.ini : Default milestone of child tickets?
-                if self.config.getbool('childtickets', 'parent.%s.inherit_milestone' % ticket['type']):
-                    default_child_milestone = ticket['milestone']
-                else:
-                    default_child_milestone = self.config.get('ticket', 'default_milestone')
-
-                # trac.ini : Default 'type' of child tickets?
-                default_child_type = self.config.get('childtickets', 'parent.%s.default_child_type' % ticket['type'])
-
                 # Are there any child tickets to display?
                 childtickets = [ Ticket(self.env,n) for n in self.env.childtickets.get(ticket.id,[]) ]
 
-                # Can user create a new ticket? If not, just display title (ie. no 'create' button).
-                if 'TICKET_CREATE' in req.perm(ticket.resource):
-                    snippet.append(tag.div(
-                        tag.form(
-                            tag.div(
-                                tag.input(type="submit", name="childticket", value="Create", title="Create a child ticket"),
-                                tag.input(type="hidden", name="parent", value='#'+str(ticket.id)),
-                                tag.input(type="hidden", name="milestone", value=default_child_milestone),
-                                tag.input(type="hidden", name="type", value=default_child_type),
-                                class_="inlinebuttons"),                            
-                            method="get", action=req.href.newticket(),
-                            ),
-                        tag.h3("Child Tickets",id="comment:child_tickets"),
-                        ))
-                else:
+                # trac.ini : Which columns to display in child ticket listing?
+                columns = self.config.getlist('childtickets', 'parent.%s.table_headers' % ticket['type'], default=['summary','owner'])
+
+                # trac.ini : child tickets are allowed.
+                if self.config.getbool('childtickets', 'parent.%s.allow_child_tickets' % ticket['type']):
+
+                    # trac.ini : Default milestone of child tickets?
+                    if self.config.getbool('childtickets', 'parent.%s.inherit_milestone' % ticket['type']):
+                        default_child_milestone = ticket['milestone']
+                    else:
+                        default_child_milestone = self.config.get('ticket', 'default_milestone')
+
+                    # trac.ini : Default 'type' of child tickets?
+                    default_child_type = self.config.get('childtickets', 'parent.%s.default_child_type' % ticket['type'])
+
+                    # Can user create a new ticket? If not, just display title (ie. no 'create' button).
+                    if 'TICKET_CREATE' in req.perm(ticket.resource):
+                        snippet.append(tag.div(
+                            tag.form(
+                                tag.div(
+                                    tag.input(type="submit", name="childticket", value="Create", title="Create a child ticket"),
+                                    tag.input(type="hidden", name="parent", value='#'+str(ticket.id)),
+                                    tag.input(type="hidden", name="milestone", value=default_child_milestone),
+                                    tag.input(type="hidden", name="type", value=default_child_type),
+                                    class_="inlinebuttons"),                            
+                                method="get", action=req.href.newticket(),
+                                ),
+                            tag.h3("Child Tickets",id="comment:child_tickets"),
+                            ))
+                    else:
+                        snippet.append(tag.div(tag.h3("Child Tickets",id="comment:child_tickets")))
+
+                # trac.ini : child tickets are NOT allowed but (somehow?!) this parent ticket has children assigned.
+                elif childtickets:
                     snippet.append(tag.div(tag.h3("Child Tickets",id="comment:child_tickets")))
 
                 # Test if the ticket has children: If so, then list in pretty table.
-                if not childtickets:
-                    snippet.append(tag.div(tag.p("NO SUB-TICKETS.")))
-                else:
+                if childtickets:
                     snippet.append(
                             tag.div(
                                 tag.table(
@@ -137,6 +167,8 @@ class TracchildticketsModule(Component):
                                     ),
                                 )
                             )
+                elif self.config.getbool('childtickets', 'parent.%s.allow_child_tickets' % ticket['type']):
+                    snippet.append(tag.div(tag.p("NO SUB-TICKETS.")))
 
                 return stream | filter.append(snippet)
 
