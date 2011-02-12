@@ -122,12 +122,6 @@ class TracchildticketsModule(Component):
                 # trac.ini : child tickets are allowed.
                 if self.config.getbool('childtickets', 'parent.%s.allow_child_tickets' % ticket['type']):
 
-                    # trac.ini : Default milestone of child tickets?
-                    if self.config.getbool('childtickets', 'parent.%s.inherit_milestone' % ticket['type']):
-                        default_child_milestone = ticket['milestone']
-                    else:
-                        default_child_milestone = self.config.get('ticket', 'default_milestone')
-
                     # trac.ini : Default 'type' of child tickets?
                     default_child_type = self.config.get('childtickets', 'parent.%s.default_child_type' % ticket['type'], default=self.config.get('ticket','default_type'))
 
@@ -135,14 +129,31 @@ class TracchildticketsModule(Component):
 
                     # Can user create a new ticket? If not, just display title (ie. no 'create' button).
                     if 'TICKET_CREATE' in req.perm(ticket.resource):
+
+                        # Always pass these fields
+                        default_child_fields = (
+                                tag.input(type="hidden", name="parent", value='#'+str(ticket.id)),
+                                )
+
+                        #Pass extra fields defined in inherit parameter of parent
+                        inherited_child_fields = [
+                                tag.input(type="hidden",name="%s"%field,value=ticket[field]) for field in self.config.getlist('childtickets','parent.%s.inherit' % ticket['type'])
+                                ]
+
+                        # If child types are restricted then create a set of buttons for the allowed types (This will override 'default_child_type).
+                        restrict_child_types = self.config.getlist('childtickets','parent.%s.restrict_child_type' % ticket['type'],default=[])
+                        if not restrict_child_types:
+                            # ... create a default submit button
+                            submit_button_fields = (
+                                    tag.input(type="submit",name="childticket",value="New Child Ticket",title="Create a child ticket"),
+                                    tag.input(type="hidden", name="type", value=default_child_type),
+                                    )
+                        else:
+                            submit_button_fields = [ tag.input(type="submit",name="type",value="%s" % ticket_type,title="Create a %s child ticket" % ticket_type) for ticket_type in restrict_child_types ]
+        
                         snippet.append(tag.div(
                             tag.form(
-                                tag.div(
-                                    tag.input(type="submit", name="childticket", value="Create", title="Create a child ticket"),
-                                    tag.input(type="hidden", name="parent", value='#'+str(ticket.id)),
-                                    tag.input(type="hidden", name="milestone", value=default_child_milestone),
-                                    tag.input(type="hidden", name="type", value=default_child_type),
-                                    class_="inlinebuttons"),                            
+                                tag.div( default_child_fields, inherited_child_fields, submit_button_fields, class_="inlinebuttons"),                            
                                 method="get", action=req.href.newticket(),
                                 ),
                             tag.h3("Child Tickets",id="comment:child_tickets"),
