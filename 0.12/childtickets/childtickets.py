@@ -21,14 +21,19 @@ class TracchildticketsModule(Component):
     def pre_process_request(self, req, handler):
 
         # Get ticket relationships before processing anything.
-        if req.path_info[0:8] == '/ticket/':
+        if req.path_info[0:8] == '/ticket/' or req.path_info[0:10] == '/newticket':
             cursor = self.env.get_db_cnx().cursor()
             cursor.execute("SELECT ticket,value FROM ticket_custom WHERE name='parent'")
-            self.env.childtickets = {}
+
+            # Create two dicts for later use:
+            self.env.childtickets = {} # { parent -> children } - 1:n
+            self.env.parenttickets = {} # { child -> parent }   - 1:1
+
             for child,parent in cursor.fetchall():
                 if parent and re.match('#\d+',parent):
                     parent = int(parent.lstrip('#'))
                     self.env.childtickets.setdefault(parent,[]).append(child)
+                    self.env.parenttickets[child] = parent
         return handler
 
     def post_process_request(self, req, template, data, content_type):
@@ -62,17 +67,35 @@ class TracchildticketsModule(Component):
             if ticket.id and pid == ticket.id:
                 yield 'parent', "The ticket has same id as parent id."
 
+            # Recursive/Circular ticket check : Does ticket recursion goes too deep (as defined by 'default.max_depth' in 'trac.ini')?
+            max_depth = self.config.getint('childtickets', 'default.max_depth', default=5)
+
+            fam_tree = [ ticket.id, pid ]   # The 'family tree' already consists of this ticket id plus the parent
+
+            for grandad in self._nextparent(pid):
+                fam_tree.append(grandad)
+                if ticket.id == grandad:
+                    yield 'parent', "The tickets have a circular dependency upon each other : %s" % str(' --> '.join([ '#%s'%x for x in fam_tree]))
+                if len(fam_tree) > max_depth:
+                    yield 'parent', "Parent/Child relationships go too deep, 'max_depth' exceeded (%s) : %s" % (max_depth, ' --> '.join([ '#%s'%x for x in fam_tree]))
+                    break
+
             # Try creating parent ticket instance : it should exist.
             try:
                 parent = Ticket(self.env, pid)
             
-                # self.env.log.debug("TracchildticketsModule : parent.ticket.type: %s" % parent['type'])
+            except ResourceNotFound: 
+                yield 'parent', "The parent ticket #%d does not exist." % pid
+
+            else:
 
                 # (NOTE: The following checks are checks on the parent ticket being defined in the 'parent' box rather than on
                 # the child ticket actually being created. It is therefore possible to 'legally' create this child ticket but
                 # then for the restrictions or type of the parent ticket to change - I have NOT restricted the possibility to
                 # modify parent type after children have been assigned, however, further modifications to the children themselves
                 # would then throw up some errors and force the users to re-set the child type.)
+
+                # self.env.log.debug("TracchildticketsModule : parent.ticket.type: %s" % parent['type'])
 
                 # Does the parent ticket 'type' even allow child tickets? 
                 if not self.config.getbool('childtickets', 'parent.%s.allow_child_tickets' % parent['type']):
@@ -82,14 +105,6 @@ class TracchildticketsModule(Component):
                 allowedtypes = self.config.getlist('childtickets', 'parent.%s.restrict_child_type' % parent['type'], default=[])
                 if allowedtypes and ticket['type'] not in allowedtypes:
                     yield 'parent', "The parent ticket (#%s) has type %s which does not allow child type '%s'. Must be one of : %s." % (pid,parent['type'],ticket['type'],','.join(allowedtypes))
-
-            # If the 'Ticket' creation fails above.
-            except ResourceNotFound: 
-                yield 'parent',"The parent ticket #%d does not exist." % pid
-
-        # TODO: Add a recursive ticket check, subject to a general limit (trac.ini) which has a default value of, say 3.
-        # yield None, "The ticket recursion is too deep (%s)" % max_depth
-
 
     
     # ITemplateStreamFilter methods
@@ -193,14 +208,20 @@ class TracchildticketsModule(Component):
 
         return stream
 
-    def _table_row(self, req, ticket, columns):
 
+    def _table_row(self, req, ticket, columns):
         # Is the ticket closed?
         ticket_class = ''
         if ticket['status'] == 'closed':
             ticket_class = 'closed'
-
         return tag.tr(
                 tag.td(tag.a("#%s" % ticket.id, href=req.href.ticket(ticket.id), title="Child ticket #%s" % ticket.id, class_=ticket_class), class_="id"),
                 [ tag.td(ticket[s], class_=s) for s in columns ],
                 )
+
+    def _nextparent(self, child):
+        while child in self.env.parenttickets:
+            yield self.env.parenttickets[child]
+            self.env.log.debug("XXXX : yielding %s" % self.env.parenttickets[child])
+            child = self.env.parenttickets[child]
+            self.env.log.debug("XXXX : child now: %s" % child)
