@@ -46,21 +46,21 @@ class TracchildticketsModule(Component):
         if req.args.get('action') == 'resolve':
             for t in self.env.childtickets.get(ticket.id,[]):
                 if Ticket(self.env,t)['status'] != 'closed':
-                    yield None, 'Cannot resolve ticket while child ticket (#%s) is still open.' % t
+                    yield 'parent', 'Cannot resolve ticket while child ticket (#%s) is still open.' % t
 
         # Check if the 'parent' field is being used.
         if ticket.values.get('parent'):
 
             # Is it of correct 'format'?
             if not re.match('^#\d+',ticket.values.get('parent')):
-                yield None, "The parent id must be of the form '#id' where 'id' is a valid ticket id."
+                yield 'parent', "The parent id must be of the form '#id' where 'id' is a valid ticket id."
 
             # Strip the '#' to get parent id.
             pid = int(ticket.values.get('parent').lstrip('#'))
 
             # Check we're not being daft and setting own id as parent.
             if ticket.id and pid == ticket.id:
-                yield None, "The ticket has same id as parent id."
+                yield 'parent', "The ticket has same id as parent id."
 
             # Try creating parent ticket instance : it should exist.
             try:
@@ -76,16 +76,16 @@ class TracchildticketsModule(Component):
 
                 # Does the parent ticket 'type' even allow child tickets? 
                 if not self.config.getbool('childtickets', 'parent.%s.allow_child_tickets' % parent['type']):
-                    yield None, "The parent ticket (#%s) has type %s which does not allow child tickets." % (pid,parent['type'])
+                    yield 'parent', "The parent ticket (#%s) has type %s which does not allow child tickets." % (pid,parent['type'])
 
                 # It is possible that the parent restricts the type of children it allows.
                 allowedtypes = self.config.getlist('childtickets', 'parent.%s.restrict_child_type' % parent['type'], default=[])
                 if allowedtypes and ticket['type'] not in allowedtypes:
-                    yield None, "The parent ticket (#%s) has type %s which does not allow child type '%s'. Must be one of : %s." % (pid,parent['type'],ticket['type'],','.join(allowedtypes))
+                    yield 'parent', "The parent ticket (#%s) has type %s which does not allow child type '%s'. Must be one of : %s." % (pid,parent['type'],ticket['type'],','.join(allowedtypes))
 
             # If the 'Ticket' creation fails above.
             except ResourceNotFound: 
-                yield None,"The parent ticket #%d does not exist." % pid
+                yield 'parent',"The parent ticket #%d does not exist." % pid
 
         # TODO: Add a recursive ticket check, subject to a general limit (trac.ini) which has a default value of, say 3.
         # yield None, "The ticket recursion is too deep (%s)" % max_depth
