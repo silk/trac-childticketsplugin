@@ -134,6 +134,9 @@ class TracchildticketsModule(Component):
                 # Are there any child tickets to display?
                 childtickets = [ Ticket(self.env,n) for n in self.env.childtickets.get(ticket.id,[]) ]
 
+                # (tempish) fix for #8612 : force sorting by ticket id
+                childtickets = sorted(childtickets, key=lambda t: t.id)
+
                 # Are child tickets allowed?
                 childtickets_allowed = self.config.getbool('childtickets', 'parent.%s.allow_child_tickets' % ticket['type'])
 

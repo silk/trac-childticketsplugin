@@ -116,6 +116,10 @@ class TracchildticketsModule(Component):
                 # Are there any child tickets to display?
                 childtickets = [ Ticket(self.env,n) for n in self.env.childtickets.get(ticket.id,[]) ]
 
+                # (tempish) fix for #8612 : force sorting by ticket id
+                childtickets = sorted(childtickets, key=lambda t: t.id)
+
+
                 # trac.ini : Which columns to display in child ticket listing?
                 columns = self.config.getlist('childtickets', 'parent.%s.table_headers' % ticket['type'], default=['summary','owner'])
 
