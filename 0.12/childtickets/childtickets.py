@@ -3,8 +3,8 @@
 import re
 
 from trac.core import *
-from trac.ticket.api import ITicketManipulator
-from trac.web.api import ITemplateStreamFilter, IRequestFilter
+from trac.ticket.api import ITicketManipulator, ITicketChangeListener
+from trac.web.api import ITemplateStreamFilter
 from trac.perm import IPermissionRequestor
 from trac.ticket.model import Ticket
 from trac.resource import ResourceNotFound
@@ -13,33 +13,24 @@ from genshi.builder import tag
 from genshi.filters import Transformer
 
 class TracchildticketsModule(Component):
-    implements(ITicketManipulator, ITemplateStreamFilter, IRequestFilter)
+    implements(ITicketManipulator, ITemplateStreamFilter, ITicketChangeListener)
 
 
+    def __init__(self):
+        self._update_child_info()
 
-    # IRequestFilter methods
-    def pre_process_request(self, req, handler):
 
-        # Get ticket relationships before processing anything.
-        if req.path_info[0:8] == '/ticket/' or req.path_info[0:10] == '/newticket':
-            db = self.env.get_db_cnx() 
-            cursor = db.cursor() 
-            cursor.execute("SELECT ticket,value FROM ticket_custom WHERE name='parent'")
+    # ITicketChangeListener methods
+    def ticket_changed(self, ticket, comment, author, old_values):
+        if 'parent' in old_values:
+            self._update_child_info()
 
-            # Create two dicts for later use:
-            self.env.childtickets = {} # { parent -> children } - 1:n
-            self.env.parenttickets = {} # { child -> parent }   - 1:1
+    def ticket_created(self, ticket):
+        self._update_child_info()
 
-            for child,parent in cursor.fetchall():
-                if parent and re.match('#\d+',parent):
-                    parent = int(parent.lstrip('#'))
-                    self.env.childtickets.setdefault(parent,[]).append(child)
-                    self.env.parenttickets[child] = parent
-        return handler
-
-    def post_process_request(self, req, template, data, content_type):
-        return (template, data, content_type)
-
+    def ticket_deleted(self, ticket):
+        # NOTE: Is there a way to 'block' a ticket deletion if it still has child tickets?
+        self._update_child_info()
 
 
     # ITicketManipulator methods
@@ -226,6 +217,19 @@ class TracchildticketsModule(Component):
     def _nextparent(self, child):
         while child in self.env.parenttickets:
             yield self.env.parenttickets[child]
-            self.env.log.debug("XXXX : yielding %s" % self.env.parenttickets[child])
             child = self.env.parenttickets[child]
-            self.env.log.debug("XXXX : child now: %s" % child)
+
+    def _update_child_info(self):
+        # Get ticket relationships
+        db = self.env.get_db_cnx() 
+        cursor = db.cursor() 
+        cursor.execute("SELECT ticket,value FROM ticket_custom WHERE name='parent'")
+        
+        self.env.childtickets = {}  # { parent -> children } - 1:n
+        self.env.parenttickets = {} # { child -> parent }   - 1:1
+
+        for child,parent in cursor.fetchall():
+            if parent and re.match('#\d+',parent):
+                parent = int(parent.lstrip('#'))
+                self.env.childtickets.setdefault(parent,[]).append(child)
+                self.env.parenttickets[child] = parent
