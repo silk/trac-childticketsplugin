@@ -3,8 +3,9 @@
 import re
 
 from trac.core import *
-from trac.ticket.api import ITicketManipulator
-from trac.web.api import ITemplateStreamFilter, IRequestFilter
+from trac.cache import cached
+from trac.ticket.api import ITicketManipulator, ITicketChangeListener
+from trac.web.api import ITemplateStreamFilter
 from trac.perm import IPermissionRequestor
 from trac.ticket.model import Ticket
 from trac.resource import ResourceNotFound
@@ -13,33 +14,34 @@ from genshi.builder import tag
 from genshi.filters import Transformer
 
 class TracchildticketsModule(Component):
-    implements(ITicketManipulator, ITemplateStreamFilter, IRequestFilter)
+    implements(ITicketManipulator, ITemplateStreamFilter, ITicketChangeListener)
 
 
+    @cached
+    def childtickets(self,db):
+        # NOTE: Ignore the above 'db' arg that is supplied to '@cached' decorated functions - I think I read somewhere that
+        # this is no longer supported. (But I'm keeping it here for compatibility!)
+        db = self.env.get_db_cnx() 
+        cursor = db.cursor() 
+        cursor.execute("SELECT ticket,value FROM ticket_custom WHERE name='parent'")
+        x = {}    # { parent -> children } - 1:n
+        for child,parent in cursor.fetchall():
+            if parent and re.match('#\d+',parent):
+                x.setdefault( int(parent.lstrip('#')), [] ).append(child)
+        return x
 
-    # IRequestFilter methods
-    def pre_process_request(self, req, handler):
 
-        # Get ticket relationships before processing anything.
-        if req.path_info[0:8] == '/ticket/' or req.path_info[0:10] == '/newticket':
-            db = self.env.get_db_cnx() 
-            cursor = db.cursor() 
-            cursor.execute("SELECT ticket,value FROM ticket_custom WHERE name='parent'")
+    # ITicketChangeListener methods
+    def ticket_changed(self, ticket, comment, author, old_values):
+        if 'parent' in old_values:
+            del self.childtickets
 
-            # Create two dicts for later use:
-            self.env.childtickets = {} # { parent -> children } - 1:n
-            self.env.parenttickets = {} # { child -> parent }   - 1:1
+    def ticket_created(self, ticket):
+        del self.childtickets
 
-            for child,parent in cursor.fetchall():
-                if parent and re.match('#\d+',parent):
-                    parent = int(parent.lstrip('#'))
-                    self.env.childtickets.setdefault(parent,[]).append(child)
-                    self.env.parenttickets[child] = parent
-        return handler
-
-    def post_process_request(self, req, template, data, content_type):
-        return (template, data, content_type)
-
+    def ticket_deleted(self, ticket):
+        # NOTE: Is there a way to 'block' a ticket deletion if it still has child tickets?
+        del self.childtickets
 
 
     # ITicketManipulator methods
@@ -50,7 +52,7 @@ class TracchildticketsModule(Component):
 
         # Don't allow ticket to be 'resolved' if any child tickets are still open.
         if req.args.get('action') == 'resolve':
-            for t in self.env.childtickets.get(ticket.id,[]):
+            for t in self.childtickets.get(ticket.id,[]):
                 if Ticket(self.env,t)['status'] != 'closed':
                     yield 'parent', 'Cannot resolve ticket while child ticket (#%s) is still open.' % t
 
@@ -73,12 +75,12 @@ class TracchildticketsModule(Component):
 
             fam_tree = [ ticket.id, pid ]   # The 'family tree' already consists of this ticket id plus the parent
 
-            for grandad in self._nextparent(pid):
+            for grandad in self._get_parent_id(pid):
                 fam_tree.append(grandad)
                 if ticket.id == grandad:
                     yield 'parent', "The tickets have a circular dependency upon each other : %s" % str(' --> '.join([ '#%s'%x for x in fam_tree]))
                 if len(fam_tree) > max_depth:
-                    yield 'parent', "Parent/Child relationships go too deep, 'max_depth' exceeded (%s) : %s" % (max_depth, ' --> '.join([ '#%s'%x for x in fam_tree]))
+                    yield 'parent', "Parent/Child relationships go too deep, 'max_depth' exceeded (%s) : %s" % (max_depth, ' - '.join([ '#%s'%x for x in fam_tree]))
                     break
 
             # Try creating parent ticket instance : it should exist.
@@ -133,7 +135,7 @@ class TracchildticketsModule(Component):
                 snippet = tag.div(id="attachments")
 
                 # Are there any child tickets to display?
-                childtickets = [ Ticket(self.env,n) for n in self.env.childtickets.get(ticket.id,[]) ]
+                childtickets = [ Ticket(self.env,n) for n in self.childtickets.get(ticket.id,[]) ]
 
                 # (tempish) fix for #8612 : force sorting by ticket id
                 childtickets = sorted(childtickets, key=lambda t: t.id)
@@ -223,7 +225,13 @@ class TracchildticketsModule(Component):
                 [ tag.td(ticket[s], class_=s) for s in columns ],
                 )
 
-    def _nextparent(self, child):
-        while child in self.env.parenttickets:
-            yield self.env.parenttickets[child]
-            child = self.env.parenttickets[child]
+    def _get_parent_id(self, ticket_id):
+        # Create a temp dict to hold direct child->parent relationships.
+        parenttickets = {}
+        for parent,childtickets in self.childtickets.items():
+            for child in childtickets:
+                parenttickets[child] = parent
+        while ticket_id in parenttickets:
+            yield parenttickets[ticket_id]
+            ticket_id = parenttickets[ticket_id]
+
