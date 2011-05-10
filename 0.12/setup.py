@@ -5,7 +5,7 @@ from setuptools import find_packages, setup
 # use package name as entry_points
 setup(
     name = 'Tracchildtickets',
-    version = '2.4.0-BETA',
+    version = '2.4.1',
     packages = find_packages(),
     author = 'Mark Ryan',
     author_email = 'walnut.trac.hacks@gmail.com',

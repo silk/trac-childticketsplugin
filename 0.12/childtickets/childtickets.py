@@ -147,6 +147,10 @@ class TracchildticketsModule(Component):
                 if not childtickets_allowed and not childtickets:
                     return stream
 
+                # Our 'main' display consists of two divs.
+                buttondiv = tag.div()
+                tablediv = tag.div()
+
                 # Test if the ticket has children: If so, then list in pretty table.
                 if childtickets:
 
@@ -165,10 +169,6 @@ class TracchildticketsModule(Component):
                                     ),
                                 tag.br(),
                                 )
-
-
-                else:
-                    tablediv = tag.div()
 
                 # trac.ini : child tickets are allowed - Set up 'create new ticket' buttons.
                 if childtickets_allowed:
@@ -204,8 +204,6 @@ class TracchildticketsModule(Component):
                                     tag.div( default_child_fields, inherited_child_fields, submit_button_fields),
                                     method="get", action=req.href.newticket(),
                                     )
-                else:
-                    buttondiv = tag.div()
 
                 snippet.append(tag.h2("Child Tickets",class_="foldable"))
                 snippet.append(tag.div(tablediv, buttondiv))
