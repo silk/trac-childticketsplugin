@@ -132,7 +132,7 @@ class TracchildticketsModule(Component):
                 # are all 'wrapped up' in a 'div' with the 'attachments' id (we'll just pinch this to make look and feel consistent with any
                 # future changes!)
                 filter = Transformer('//div[@id="ticket"]')
-                snippet = tag.div(id="attachments")
+                snippet = tag.div(id="childtickets")
 
                 # Are there any child tickets to display?
                 childtickets = [ Ticket(self.env,n) for n in self.childtickets.get(ticket.id,[]) ]
