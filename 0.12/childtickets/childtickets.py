@@ -55,7 +55,7 @@ class TracchildticketsModule(Component):
         if req.args.get('action') == 'resolve':
             for t in self.childtickets.get(ticket.id,[]):
                 if Ticket(self.env,t)['status'] != 'closed':
-                    yield 'parent', 'Cannot resolve ticket while child ticket (#%s) is still open.' % t
+                    yield '', 'Cannot resolve ticket while child ticket (#%s) is still open.' % t
 
         # Check if the 'parent' field is being used.
         if ticket.values.get('parent'):
@@ -99,8 +99,6 @@ class TracchildticketsModule(Component):
                 # modify parent type after children have been assigned, however, further modifications to the children themselves
                 # would then throw up some errors and force the users to re-set the child type.)
 
-                # self.env.log.debug("TracchildticketsModule : parent.ticket.type: %s" % parent['type'])
-
                 # Does the parent ticket 'type' even allow child tickets? 
                 if not self.config.getbool('childtickets', 'parent.%s.allow_child_tickets' % parent['type']):
                     yield 'parent', "The parent ticket (#%s) has type %s which does not allow child tickets." % (pid,parent['type'])
@@ -109,6 +107,12 @@ class TracchildticketsModule(Component):
                 allowedtypes = self.config.getlist('childtickets', 'parent.%s.restrict_child_type' % parent['type'], default=[])
                 if allowedtypes and ticket['type'] not in allowedtypes:
                     yield 'parent', "The parent ticket (#%s) has type %s which does not allow child type '%s'. Must be one of : %s." % (pid,parent['type'],ticket['type'],','.join(allowedtypes))
+
+                # If the parent is 'closed' then we should not be allowed to create a new child ticket against that parent.
+                if parent['status'] == 'closed':
+                    yield 'parent', "The parent ticket (#%s) is not an active ticket (status: %s)." % (pid,parent['status'])
+
+                # self.env.log.debug("TracchildticketsModule : parent.ticket.type: %s" % parent['type'])
 
     
     # ITemplateStreamFilter methods
@@ -198,12 +202,21 @@ class TracchildticketsModule(Component):
                             default_child_type = self.config.get('childtickets', 'parent.%s.default_child_type' % ticket['type'], default=self.config.get('ticket','default_type'))
 
                             # ... create a default submit button
-                            submit_button_fields = (
-                                    tag.input(type="submit",name="childticket",value="New Child Ticket",title="Create a child ticket"),
-                                    tag.input(type="hidden", name="type", value=default_child_type),
-                                    )
+                            if ticket['status'] == 'closed':
+                                submit_button_fields = (
+                                        tag.input(type="submit",disabled="disabled",name="childticket",value="New Child Ticket",title="Create a child ticket"),
+                                        tag.input(type="hidden", name="type", value=default_child_type),
+                                        )
+                            else:
+                                submit_button_fields = (
+                                        tag.input(type="submit",name="childticket",value="New Child Ticket",title="Create a child ticket"),
+                                        tag.input(type="hidden",name="type",value=default_child_type),
+                                        )
                         else:
-                            submit_button_fields = [ tag.input(type="submit",name="type",value="%s" % ticket_type,title="Create a %s child ticket" % ticket_type) for ticket_type in restrict_child_types ]
+                            if ticket['status'] == 'closed':
+                                submit_button_fields = [ tag.input(type="submit",disabled="disabled",name="type",value="%s" % ticket_type,title="Create a %s child ticket" % ticket_type) for ticket_type in restrict_child_types ]
+                            else:
+                                submit_button_fields = [ tag.input(type="submit",name="type",value="%s" % ticket_type,title="Create a %s child ticket" % ticket_type) for ticket_type in restrict_child_types ]
                         buttondiv = tag.form(
                                     tag.div( default_child_fields, inherited_child_fields, submit_button_fields),
                                     method="get", action=req.href.newticket(),
@@ -224,7 +237,6 @@ class TracchildticketsModule(Component):
     
     def get_htdocs_dirs(self):
         from pkg_resources import resource_filename
-        self.env.log.debug("XXXX :  %s" % resource_filename(__name__, 'htdocs'))
         return [('ct', resource_filename(__name__, 'htdocs'))]
 
 
