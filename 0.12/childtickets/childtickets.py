@@ -5,6 +5,7 @@ import re
 from trac.core import *
 from trac.cache import cached
 from trac.ticket.api import ITicketManipulator, ITicketChangeListener
+from trac.web.chrome import ITemplateProvider, add_stylesheet
 from trac.web.api import ITemplateStreamFilter
 from trac.perm import IPermissionRequestor
 from trac.ticket.model import Ticket
@@ -14,7 +15,7 @@ from genshi.builder import tag
 from genshi.filters import Transformer
 
 class TracchildticketsModule(Component):
-    implements(ITicketManipulator, ITemplateStreamFilter, ITicketChangeListener)
+    implements(ITicketManipulator, ITemplateStreamFilter, ITicketChangeListener, ITemplateProvider)
 
 
     @cached
@@ -116,6 +117,9 @@ class TracchildticketsModule(Component):
         # Tickets will be modified to show the child tickets as a list under the 'Description' section.
         if filename == 'ticket.html':
 
+            # Add our own styles for the ticket lists.
+            add_stylesheet(req, 'ct/css/childtickets.css')
+
             # Get the ticket info.
             ticket = data.get('ticket')
 
@@ -132,7 +136,7 @@ class TracchildticketsModule(Component):
                 # are all 'wrapped up' in a 'div' with the 'attachments' id (we'll just pinch this to make look and feel consistent with any
                 # future changes!)
                 filter = Transformer('//div[@id="ticket"]')
-                snippet = tag.div(id="childtickets")
+                snippet = tag.div()
 
                 # Are there any child tickets to display?
                 childtickets = [ Ticket(self.env,n) for n in self.childtickets.get(ticket.id,[]) ]
@@ -206,11 +210,23 @@ class TracchildticketsModule(Component):
                                     )
 
                 snippet.append(tag.h2("Child Tickets",class_="foldable"))
-                snippet.append(tag.div(tablediv, buttondiv))
+                snippet.append(tag.div(tablediv, buttondiv, id="childtickets"))
 
                 return stream | filter.after(snippet)
 
         return stream
+
+
+
+    # ITemplateProvider methods
+    def get_templates_dirs(self):
+        return []
+    
+    def get_htdocs_dirs(self):
+        from pkg_resources import resource_filename
+        self.env.log.debug("XXXX :  %s" % resource_filename(__name__, 'htdocs'))
+        return [('ct', resource_filename(__name__, 'htdocs'))]
+
 
 
     def _table_row(self, req, ticket, columns):
