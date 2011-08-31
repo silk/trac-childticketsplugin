@@ -1,6 +1,23 @@
 div#childtickets  {
-    border-width: 1px;
-    border-style: outset;
-    border-color: #999966;
+    border: 1px outset #996;
+    border-radius: .5em;
     padding: 1em;
+}
+
+div#childtickets table.listing {
+    border: none;
+    margin-top: 0;
+}
+
+div#childtickets table.listing thead th {
+    border: none;
+}
+
+div#childtickets table.listing tbody tr {
+    border: none;
+}
+
+div#childtickets table.listing tbody td {
+    border: none;
+    padding: 0.1em 0.5em;
 }
