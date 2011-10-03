@@ -1,6 +1,7 @@
 # ChildTickets plugin
 
 import re
+from itertools import groupby
 
 from trac.core import *
 from trac.cache import cached
@@ -8,7 +9,7 @@ from trac.ticket.api import ITicketManipulator, ITicketChangeListener
 from trac.web.chrome import ITemplateProvider, add_stylesheet
 from trac.web.api import ITemplateStreamFilter
 from trac.perm import IPermissionRequestor
-from trac.ticket.model import Ticket
+from trac.ticket.model import Ticket, Priority
 from trac.resource import ResourceNotFound
 
 from genshi.builder import tag
@@ -123,6 +124,7 @@ class TracchildticketsModule(Component):
 
             # Add our own styles for the ticket lists.
             add_stylesheet(req, 'ct/css/childtickets.css')
+            add_stylesheet(req, 'common/css/report.css')
 
             # Get the ticket info.
             ticket = data.get('ticket')
@@ -142,8 +144,9 @@ class TracchildticketsModule(Component):
                 filter = Transformer('//div[@id="ticket"]')
                 snippet = tag.div()
 
+                priorities = dict([(p.name, int(p.value)) for p in Priority.select(self.env)])
                 # Are there any child tickets to display?
-                childtickets = self._get_childtickets(ticket)
+                childtickets = self._get_childtickets(ticket, priorities)
 
                 # Are child tickets allowed?
                 childtickets_allowed = self.config.getbool('childtickets', 'parent.%s.allow_child_tickets' % ticket['type'])
@@ -158,7 +161,7 @@ class TracchildticketsModule(Component):
 
                 # Test if the ticket has children: If so, then list in pretty table.
                 if childtickets:
-                    tablediv = self._contruct_tickets_table(req, ticket, childtickets)
+                    tablediv = self._contruct_tickets_table(req, ticket, childtickets, priorities)
 
                 # trac.ini : child tickets are allowed - Set up 'create new ticket' buttons.
                 if childtickets_allowed and 'TICKET_CREATE' in req.perm(ticket.resource):
@@ -171,34 +174,36 @@ class TracchildticketsModule(Component):
 
         return stream
 
-    def _get_childtickets(self, ticket):
+    def _get_childtickets(self, ticket, priorities):
         childtickets = [ Ticket(self.env,n) for n in self.childtickets.get(ticket.id,[]) ]
         
         # (tempish) fix for #8612 : force sorting by ticket id
-        childtickets = sorted(childtickets, key=lambda t: t.id)
+        childtickets = sorted(childtickets, key=lambda t: (t['type'], priorities[t['priority']], t.id))
 
         return childtickets
 
-    def _contruct_tickets_table(self, req, ticket, childtickets):
+    def _contruct_tickets_table(self, req, ticket, childtickets, priorities):
         # trac.ini : Which columns to display in child ticket listing?
         columns = self.config.getlist('childtickets', 'parent.%s.table_headers' % ticket['type'], default=['summary','owner'])
 
-        tablediv = tag.div(
+        tablediv = tag.div()
+        for tkt_types, type_tickets in groupby(childtickets, lambda t: t['type']):
+            tablediv.append(tag.h2("Type: %s" % tkt_types, class_="report-result"))
+            tablediv.append(
                     tag.table(
                         tag.thead(
                             tag.tr(
                                 tag.th("Ticket",class_="id"),
                                 [ tag.th(s.title(),class_=s) for s in columns ])
                             ),
-                        tag.tbody([ self._table_row(req,tkt,columns) for tkt in childtickets ]),
+                        tag.tbody([ self._table_row(req,tkt,columns,priorities) for tkt in type_tickets]),
                         class_="listing tickets",
-                        ),
-                    tag.br(),
+                        )
                     )
 
         return tablediv
 
-    def _table_row(self, req, ticket, columns):
+    def _table_row(self, req, ticket, columns, priorities):
         # Is the ticket closed?
         ticket_class = ''
         if ticket['status'] == 'closed':
@@ -206,6 +211,7 @@ class TracchildticketsModule(Component):
         return tag.tr(
                 tag.td(tag.a("#%s" % ticket.id, href=req.href.ticket(ticket.id), title="Child ticket #%s" % ticket.id, class_=ticket_class), class_="id"),
                 [ tag.td(ticket[s], class_=s) for s in columns ],
+                class_="prio%s" % priorities[ticket['priority']],
                 )
 
     def _contruct_buttons(self, req, ticket):
