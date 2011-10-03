@@ -143,10 +143,7 @@ class TracchildticketsModule(Component):
                 snippet = tag.div()
 
                 # Are there any child tickets to display?
-                childtickets = [ Ticket(self.env,n) for n in self.childtickets.get(ticket.id,[]) ]
-
-                # (tempish) fix for #8612 : force sorting by ticket id
-                childtickets = sorted(childtickets, key=lambda t: t.id)
+                childtickets = self._get_childtickets(ticket)
 
                 # Are child tickets allowed?
                 childtickets_allowed = self.config.getbool('childtickets', 'parent.%s.allow_child_tickets' % ticket['type'])
@@ -173,6 +170,14 @@ class TracchildticketsModule(Component):
                 return stream | filter.after(snippet)
 
         return stream
+
+    def _get_childtickets(self, ticket):
+        childtickets = [ Ticket(self.env,n) for n in self.childtickets.get(ticket.id,[]) ]
+        
+        # (tempish) fix for #8612 : force sorting by ticket id
+        childtickets = sorted(childtickets, key=lambda t: t.id)
+
+        return childtickets
 
     def _contruct_tickets_table(self, req, ticket, childtickets):
         # trac.ini : Which columns to display in child ticket listing?
