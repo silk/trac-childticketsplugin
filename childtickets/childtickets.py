@@ -181,6 +181,7 @@ class TracchildticketsModule(Component):
                 # Our 'main' display consists of two divs.
                 buttondiv = tag.div()
                 tablediv = tag.div()
+                progresshtml = tag.div()
 
                 # Test if the ticket has children: If so, then list in pretty table.
                 if childtickets:
