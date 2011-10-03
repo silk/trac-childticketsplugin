@@ -249,8 +249,8 @@ class TracchildticketsModule(Component):
             else:
                 submit_button_fields = [ tag.input(type="submit",name="type",value="%s" % ticket_type,title="Create a %s child ticket" % ticket_type) for ticket_type in restrict_child_types ]
         buttondiv = tag.form(
-                    tag.div( default_child_fields, inherited_child_fields, submit_button_fields),
-                    method="get", action=req.href.newticket(),
+                        tag.div(default_child_fields, inherited_child_fields, submit_button_fields, class_="buttons"),
+                        method="get", action=req.href.newticket(),
                     )
         return buttondiv
 
