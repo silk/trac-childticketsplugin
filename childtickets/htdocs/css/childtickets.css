@@ -4,11 +4,6 @@ div#childtickets  {
     padding: 1em;
 }
 
-div#childtickets table.listing {
-    border: none;
-    margin-top: 0;
-}
-
 div#childtickets table.listing thead th {
     border: none;
 }
