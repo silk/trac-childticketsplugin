@@ -58,16 +58,16 @@ class TracchildticketsModule(Component):
                     yield '', 'Cannot resolve ticket while child ticket (#%s) is still open.' % t
 
         # Check if the 'parent' field is being used.
-        if ticket.values.get('parent'):
+        if 'parent' in ticket.values:
 
             # Is it of correct 'format'?
-            if not re.match('#?\d+',ticket.values.get('parent')):
+            if not re.match('#?\d+',ticket['parent']):
                 yield 'parent', "The parent id must be a number."
 
             if ticket['parent'].startswith('#'):
                 ticket['parent'] = ticket['parent'][1:]
 
-            pid = int(ticket.values.get('parent'))
+            pid = int(ticket['parent'])
 
             # Check we're not being daft and setting own id as parent.
             if ticket.id and pid == ticket.id:
