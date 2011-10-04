@@ -61,8 +61,11 @@ class TracchildticketsModule(Component):
         if ticket.values.get('parent'):
 
             # Is it of correct 'format'?
-            if not re.match('\d+',ticket.values.get('parent')):
+            if not re.match('#?\d+',ticket.values.get('parent')):
                 yield 'parent', "The parent id must be a number."
+
+            if ticket['parent'].startswith('#'):
+                ticket['parent'] = ticket['parent'][1:]
 
             pid = int(ticket.values.get('parent'))
 
