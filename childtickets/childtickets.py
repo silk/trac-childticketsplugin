@@ -27,8 +27,8 @@ class TracchildticketsModule(Component):
         cursor.execute("SELECT ticket,value FROM ticket_custom WHERE name='parent'")
         x = {}    # { parent -> children } - 1:n
         for child,parent in cursor.fetchall():
-            if parent and re.match('#\d+',parent):
-                x.setdefault( int(parent.lstrip('#')), [] ).append(child)
+            if parent and re.match('\d+', parent):
+                x.setdefault(int(parent), []).append(child)
         return x
 
 
@@ -61,11 +61,10 @@ class TracchildticketsModule(Component):
         if ticket.values.get('parent'):
 
             # Is it of correct 'format'?
-            if not re.match('^#\d+',ticket.values.get('parent')):
-                yield 'parent', "The parent id must be of the form '#id' where 'id' is a valid ticket id."
+            if not re.match('\d+',ticket.values.get('parent')):
+                yield 'parent', "The parent id must be a number."
 
-            # Strip the '#' to get parent id.
-            pid = int(ticket.values.get('parent').lstrip('#'))
+            pid = int(ticket.values.get('parent'))
 
             # Check we're not being daft and setting own id as parent.
             if ticket.id and pid == ticket.id:
@@ -186,7 +185,7 @@ class TracchildticketsModule(Component):
 
                         # Always pass these fields
                         default_child_fields = (
-                                tag.input(type="hidden", name="parent", value='#'+str(ticket.id)),
+                                tag.input(type="hidden", name="parent", value=str(ticket.id)),
                                 )
 
                         #Pass extra fields defined in inherit parameter of parent
