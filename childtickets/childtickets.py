@@ -10,7 +10,7 @@ from trac.ticket.api import ITicketManipulator, ITicketChangeListener
 from trac.ticket.query import Query
 from trac.ticket.roadmap import ITicketGroupStatsProvider, \
                                 apply_ticket_permissions, get_ticket_stats
-from trac.web.chrome import Chrome, ITemplateProvider, add_stylesheet
+from trac.web.chrome import Chrome, ITemplateProvider, add_stylesheet, add_script
 from trac.web.api import ITemplateStreamFilter
 from trac.perm import IPermissionRequestor
 from trac.ticket.model import Ticket, Priority
@@ -148,6 +148,7 @@ class TracchildticketsModule(Component):
             add_stylesheet(req, 'ct/css/childtickets.css')
             add_stylesheet(req, 'common/css/report.css')
             add_stylesheet(req, 'common/css/roadmap.css')
+            add_script(req, 'ct/js/childtickets.js')
 
             # Get the ticket info.
             ticket = data.get('ticket')
@@ -229,6 +230,9 @@ class TracchildticketsModule(Component):
         columns = self.config.getlist('childtickets', 'parent.%s.table_headers' % ticket['type'], default=['summary','owner'])
 
         tablediv = tag.div()
+        tablediv.append(tag.label(tag.input(type="checkbox", checked="checked", id="cb_show_closed"),
+                                  "show closed tickets"))
+
         for tkt_types, type_tickets in groupby(childtickets, lambda t: t['type']):
             tablediv.append(tag.h2("Type: %s" % tkt_types, class_="report-result"))
             tablediv.append(
@@ -253,7 +257,7 @@ class TracchildticketsModule(Component):
         return tag.tr(
                 tag.td(tag.a("#%s" % ticket.id, href=req.href.ticket(ticket.id), title="Child ticket #%s" % ticket.id, class_=ticket_class), class_="id"),
                 [ tag.td(ticket[s], class_=s) for s in columns ],
-                class_="prio%s" % priorities[ticket['priority']],
+                class_="prio%s %s" % (priorities[ticket['priority']], ticket_class)
                 )
 
     def _contruct_buttons(self, req, ticket):
