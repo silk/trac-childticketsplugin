@@ -83,8 +83,8 @@ class TracchildticketsModule(Component):
                 if Ticket(self.env,t)['status'] != 'closed':
                     yield '', 'Cannot resolve ticket while child ticket (#%s) is still open.' % t
 
-        # Check if the 'parent' field is being used.
-        if 'parent' in ticket.values:
+        # Check if the 'parent' field is being used and is not empty
+        if 'parent' in ticket.values and ticket['parent']:
 
             # Is it of correct 'format'?
             if not re.match('#?\d+',ticket['parent']):
