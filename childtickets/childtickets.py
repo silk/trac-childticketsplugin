@@ -220,7 +220,7 @@ class TracchildticketsModule(Component):
     def _construct_progress(self, req, ticket):
         chrome = Chrome(self.env)
 
-        query = Query.from_string(self.env, "parent=#%d" % ticket.id, max=0)
+        query = Query.from_string(self.env, "parent=%d" % ticket.id, max=0)
         try:
             constraints = query.constraints[0]
         except IndexError:
