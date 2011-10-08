@@ -17,5 +17,7 @@ setup(
         [trac.plugins]
         childtickets = childtickets
     """,
-    package_data = { 'childtickets': [ 'htdocs/css/*.css' ] },
+    package_data = { 'childtickets': [ 'htdocs/css/*.css',
+                                       'htdocs/js/*.js',
+                                       'templates/*.html']},
 )
