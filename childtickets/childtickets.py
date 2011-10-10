@@ -239,7 +239,7 @@ class TracchildticketsModule(Component):
         columns = self.config.getlist('childtickets', 'parent.%s.table_headers' % ticket['type'], default=['summary','owner'])
 
         tablediv = tag.div()
-        tablediv.append(tag.label(tag.input(type="checkbox", checked="checked", id="cb_show_closed"),
+        tablediv.append(tag.label(tag.input(type="checkbox", id="cb_show_closed"),
                                   "show closed tickets"))
 
         for tkt_types, type_tickets in groupby(childtickets, lambda t: t['type']):
