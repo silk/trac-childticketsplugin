@@ -342,7 +342,8 @@ class TracchildticketsModule(Component):
         # little safeguard
         if isinstance(ticketid, list):
             return ticketid
-        if ticketid == '':
+        # skip if parent is not a number (in preview)
+        if not re.match('#?\d+', ticketid):
             return ''
         try:
             ticket = Ticket(self.env, ticketid)
