@@ -89,6 +89,7 @@ class TracchildticketsModule(Component):
             # Is it of correct 'format'?
             if not re.match('#?\d+',ticket['parent']):
                 yield 'parent', "The parent id must be a number."
+                return
 
             if ticket['parent'].startswith('#'):
                 ticket['parent'] = ticket['parent'][1:]
