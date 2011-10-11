@@ -5,6 +5,8 @@ jQuery(document).ready(function($) {
         minChars: 1,
         delay: 100,
         max: 20,
+    }).result(function(event, item) {
+        this.title  = item[1]
     }); 
 })
 
