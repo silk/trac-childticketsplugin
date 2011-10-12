@@ -8,7 +8,7 @@ setup(
     version = '2.5.1',
     packages = find_packages(),
     author = 'Mark Ryan',
-    author_email = 'walnut.trac.hacks@gmail.com',
+    author_email = 'fatrascal@bigfoot.com',
     description = 'Provides support for pseudo child-tickets and a visual reference to these within a parent ticket.',
     keywords = 'trac plugins ticket dependency childtickets',
     url = 'http://trac-hacks.org/wiki/ChildTicketsPlugin',
